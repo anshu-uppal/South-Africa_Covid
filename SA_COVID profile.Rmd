@@ -2,7 +2,7 @@
 title: "South Africa - COVID-19 profile"
 author: "Anshu Uppal"
 date: "12/27/2021"
-output: html_document
+output: pdf_document
 params:
         continent: "Africa"
 ---
@@ -65,7 +65,7 @@ alert <- read_csv("Alert Levels.csv") %>%
         )
 ```
 
-```{r echo=FALSE, warning=FALSE, fig.cap="**Figure 1.** bla bla"}
+```{r echo=FALSE, warning=FALSE}
 # Graph showing weekly deaths and daily cases (smoothed)
 ggplot()+
         geom_rect(data = alert, aes(xmin = Start_Date, xmax = End_Date, # alert level shadings
@@ -111,11 +111,11 @@ cases2 <- read_csv(tf2) %>%
         )
 ```
 
-```{r echo=FALSE, warning=FALSE, message=FALSE,fig.cap="**Figure 2.** bla bla"}
+```{r echo=FALSE, warning=FALSE, message=FALSE,fig.cap="**Not for paper** -> for regional comparison"}
 # Graph showing weekly deaths and daily cases (smoothed)
 ggplot(data = cases2)+
         geom_path(aes(x=Date, y = new_cases_smoothed), size = 1)+
-        labs(title = "Weekly deaths (all-cause) and daily COVID-19 cases (7-day smoothed)")+
+        labs(title = "Daily COVID-19 cases (7-day smoothed)")+
         theme_bw()+
         scale_x_date(date_breaks = "6 months", date_labels = "%b-%Y", minor_breaks = NULL)+
         scale_y_continuous(labels = scales::comma, minor_breaks = NULL)+
@@ -126,4 +126,99 @@ ggplot(data = cases2)+
               , panel.grid.minor.x = element_blank()
         )+
         facet_wrap(.~location)
+```
+
+```{r include=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+library(plotly)
+library(tidyverse)
+library(lubridate)
+library(ggrepel)
+
+gg_color_hue <- function(n) {
+        hues = seq(15, 375, length = n + 1)
+        hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+# data from http://ghdx.healthdata.org/gbd-results-tool
+d2 <- read_csv("IHME-GBD_2019_DATA-ed657013-1.csv") %>% 
+        rename(Country = location_name, Year = year) %>%
+        filter(metric_name == "Number",
+               # measure_name != "Prevalence",
+               Year < 2018
+               ) %>%
+        mutate(measure_name = if_else(measure_name == "Prevalence", "Prevalence (x10)", measure_name)
+               , tprev = paste(cause_name, measure_name)
+               , val2 = if_else(tprev == "HIV/AIDS Prevalence (x10)", val/10, val)
+               # , val2 = if_else(cause_name == "Tuberculosis", (val2)*3, val2)
+               , label = if_else(Year == max(Year), measure_name, NA_character_)
+               , label = if_else(Year == c(2015, 2016), "", label)
+               , label = if_else(tprev == "Tuberculosis Incidence" & Year == c(2015, 2016), 
+                                 NA_character_, label)
+               , label = if_else(tprev == "HIV/AIDS Deaths" & Year == c(2015,2016), 
+                                 NA_character_, label)
+               , label2 = if_else(Year == max(Year), tprev, NA_character_)
+               , label2 = if_else(Year == c(2015, 2016), "", label2)
+               ) %>%
+        filter(tprev != "Tuberculosis Prevalence (x10)"
+               # , cause_name == "Tuberculosis"
+               # , tprev != "Tuberculosis Deaths"
+               ) %>%
+        arrange(Year)
+
+# Population data from World Bank: https://datatopics.worldbank.org/world-development-indicators/themes/people.html
+d3 <- read_csv("population_world bank.csv", skip = 4) 
+d3 <- d3 %>% rename(Country = `Country Name`) %>%
+        filter(Country == "South Africa") %>%
+        select(-c(1:4, ...66)) %>%
+        pivot_longer(cols = `1960`:`2020`, names_to = "Year", values_to = "Population") %>%
+        filter(Year > 1989, Year < 2018)
+d4 <- merge(d2, d3) %>% mutate(rate = (val2/Population)*100000
+                               # , rate = if_else(cause_name == "Tuberculosis", (rate-330)*15, rate)
+)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+## Main plot
+d4 %>% 
+        # filter(tprev != "Tuberculosis Deaths") %>%
+        ggplot(aes(x = Year, y = rate, group = tprev, colour = cause_name))+
+        geom_path(aes(linetype = measure_name), show.legend = FALSE)+
+        geom_point(aes(shape = measure_name), show.legend = FALSE)+
+        labs(title = "HIV/AIDS and Tuberculosis Estimates in South Africa, 1990-2017",
+             y = "Estimates (per 100,000 population)")+
+        scale_y_continuous(labels = scales::comma, n.breaks = 8
+                           , sec.axis = dup_axis(breaks = seq(0,1400,200))
+                           # , sec.axis = sec_axis( ~ . /15 + 330
+                           #                        , breaks = c(330, 350, 375, 400, 425)
+                           #                        , name = "Estimate for Tuberculosis (per 100,000 population)")
+                           )+
+        scale_x_continuous(n.breaks = 6, limits = c(1990, 2017))+
+        geom_text_repel(aes(label = label2, color = cause_name, size = 12)
+                        # , nudge_x = -1
+                        # , nudge_y = 30
+                        # , force = 4
+                        # , point.padding = 2
+                        , na.rm = TRUE
+                        , show.legend = FALSE
+        )+
+        theme_bw()+
+        # facet_wrap(.~cause_name, scales = "free")+
+        # guides(linetype = "none")
+        # theme(axis.title.y = element_blank())+
+        theme(panel.grid.minor.x = element_blank()
+              , panel.grid.major.x = element_blank()
+              , panel.grid.major = element_blank()
+              , panel.grid.minor = element_blank()
+              # , legend.title = element_blank()
+              # , legend.position = c(0.75, 0.94)
+              # , legend.background = element_rect(fill = NA)
+              # , legend.key = element_rect(colour = NA, fill = NA)
+              ,legend.position = "none"
+              , axis.text.x = element_text(size = 12)
+              , axis.text.y = element_text(size = 12)
+              # , axis.text.y.left = element_text(color = "#F8766D")
+              # , axis.title.y.left = element_text(color = "#F8766D")
+              # , axis.text.y.right = element_text(color = "#00BFC4")
+              # , axis.title.y.right = element_text(color = "#00BFC4")
+        )
 ```
