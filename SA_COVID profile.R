@@ -9,7 +9,7 @@ library(scales)
 
 # Deaths data from https://www.samrc.ac.za/reports/report-weekly-deaths-south-africa
 # This url should be replaced to get the latest data from the website on deaths
-url1 <- 'https://www.samrc.ac.za/sites/default/files/files/2021-12-22/Estimated%20deaths%20for%20SA%2020%20Dec%202021%20with%20adj2.xlsx'
+url1 <- 'https://www.samrc.ac.za/sites/default/files/files/2022-01-05/Estimated%20deaths%20for%20SA%2003%20Jan%202022%20with%20adj2.xlsx'
 GET(url1, write_disk(tf <- tempfile(fileext = ".xlsx")))
 total_deaths <- tibble(read_xlsx(tf, sheet = 2, skip = 1)) %>% 
         select(-...1) %>% rename(Date = ...2, Deaths = `ALL CAUSE`) %>% drop_na(Date) %>%
@@ -19,7 +19,8 @@ total_deaths <- tibble(read_xlsx(tf, sheet = 2, skip = 1)) %>%
                Deaths = round(Deaths)) %>%
         select(-c(NATURAL, UNNATURAL)) %>% # no need to keep these as we want "All cause"
         relocate(c(Year, Deaths), .after = Week) %>%
-        filter(Date > ymd("2020-02-28"))
+        filter(Date > ymd("2020-02-28"),
+               Date < ymd("2021-12-20"))
 
 mdate <- ymd(max(total_deaths$Date)) # generate a value for the latest date in the deaths data
 
@@ -32,7 +33,7 @@ cases <- read_csv(tf2) %>%
                Week = epiweek(Date)) %>%
         # select(Date, Week, location, new_cases, new_cases_smoothed) %>%
         filter(location == "South Africa"
-               # , Date <= mdate # only if we want the cases date limits to be the same as the deaths date limits
+               , Date <= mdate # only if we want the cases date limits to be the same as the deaths date limits
         )
 
 # Alert Levels dates manually compiled from https://www.gov.za/covid-19/about/about-alert-system
@@ -56,7 +57,7 @@ ggplot()+
                                     # ymax = max(total_deaths$Deaths)+100,
                                     fill = Alert_Level
         ), # geom_rect plotted first so that it goes begind the trend lines
-        alpha = 0.6)+
+        alpha = 0.4)+
         geom_path(data = total_deaths, aes(x = Date, y = Deaths, color = "blue"), size = 1)+ # not sure why colors get inverted for cases and deaths
         geom_point(data = total_deaths, aes(x = Date, y = Deaths), color = "red", size = 1)+
         geom_path(data = cases, aes(x=Date, y = new_cases_smoothed, color = "red"), size = 1)+
@@ -72,7 +73,7 @@ ggplot()+
               axis.title.x = element_blank(),
               legend.key=element_blank()
               # , legend.position = "none"
-              , legend.position = c(0.09,0.77) # can play around with these to get a good legend positioning
+              , legend.position = c(0.08,0.77) # can play around with these to get a good legend positioning
               , legend.background = element_rect(fill = NA, size = 0)
               , axis.text.x = element_text(angle = 30 , vjust = 0.7, size = 13)
               , panel.grid.major.x = element_blank()
